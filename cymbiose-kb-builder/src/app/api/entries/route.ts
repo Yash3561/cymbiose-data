@@ -49,6 +49,21 @@ export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
 
+        // Check for duplicate URL
+        if (body.urlOrLocation) {
+            const existing = await prisma.kBEntry.findFirst({
+                where: { urlOrLocation: body.urlOrLocation }
+            });
+
+            if (existing) {
+                return NextResponse.json({
+                    error: 'Duplicate URL',
+                    message: `This URL already exists in the KB as "${existing.title}"`,
+                    existingId: existing.kbId
+                }, { status: 409 });
+            }
+        }
+
         const entry = await prisma.kBEntry.create({
             data: {
                 kbId: body.kbId,

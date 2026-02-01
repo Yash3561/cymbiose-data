@@ -26,35 +26,72 @@ const CodeIcon = () => (
 );
 
 export default function ExportPage() {
-    const [format, setFormat] = useState<'full' | 'chunks'>('full');
+    const [format, setFormat] = useState<'json' | 'jsonl' | 'csv' | 'chunks'>('json');
     const [status, setStatus] = useState<'APPROVED' | 'PENDING' | 'all'>('APPROVED');
-    const [exportData, setExportData] = useState<object | null>(null);
+    const [exportData, setExportData] = useState<string | object | null>(null);
     const [loading, setLoading] = useState(false);
 
     async function handleExport() {
         setLoading(true);
+        setExportData(null);
 
-        const params = new URLSearchParams();
-        params.set('format', format);
-        if (status !== 'all') params.set('ragStatus', status);
+        try {
+            const params = new URLSearchParams();
+            params.set('format', format);
+            if (status !== 'all') params.set('ragStatus', status);
 
-        const res = await fetch(`/api/export?${params}`);
-        const data = await res.json();
-        setExportData(data);
-        setLoading(false);
+            const res = await fetch(`/api/export?${params}`);
+
+            // CSV, JSONL, and chunks return text; JSON returns JSON object
+            if (format === 'csv' || format === 'jsonl' || format === 'chunks') {
+                const text = await res.text();
+                setExportData(text);
+            } else {
+                const data = await res.json();
+                setExportData(data);
+            }
+        } catch (error) {
+            console.error('Export error:', error);
+        } finally {
+            setLoading(false);
+        }
     }
 
-    function downloadJSON() {
+    function handleDownload() {
         if (!exportData) return;
 
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const dateStr = new Date().toISOString().split('T')[0];
+        let content: string;
+        let mimeType: string;
+        let extension: string;
+
+        // CSV, JSONL, and chunks are text formats from API
+        if (format === 'csv' || format === 'jsonl' || format === 'chunks') {
+            content = exportData as string;
+            mimeType = format === 'csv' ? 'text/csv' : 'application/x-jsonlines';
+            extension = format === 'csv' ? 'csv' : 'jsonl';
+        } else {
+            // JSON is object
+            content = JSON.stringify(exportData, null, 2);
+            mimeType = 'application/json';
+            extension = 'json';
+        }
+
+        const blob = new Blob([content], { type: mimeType });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `cymbiose_kb_${format}_${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `cymbiose_kb_${format}_${dateStr}.${extension}`;
         a.click();
         URL.revokeObjectURL(url);
     }
+
+    const formatLabels: Record<string, string> = {
+        json: 'JSON',
+        jsonl: 'JSONL',
+        csv: 'CSV',
+        chunks: 'JSONL'
+    };
 
     return (
         <div className="p-8 fade-in">
@@ -70,22 +107,52 @@ export default function ExportPage() {
 
                 <div className="grid grid-cols-2 gap-6">
                     <div>
-                        <label className="block text-sm font-medium text-slate-600 mb-3">Format</label>
-                        <div className="space-y-3">
-                            <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                        <label className="block text-sm font-medium text-slate-400 mb-3">Format</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <label className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${format === 'json' ? 'border-teal-500 bg-teal-500/10' : 'border-slate-600 hover:border-slate-500'
+                                }`}>
                                 <input
                                     type="radio"
                                     name="format"
-                                    checked={format === 'full'}
-                                    onChange={() => setFormat('full')}
+                                    checked={format === 'json'}
+                                    onChange={() => setFormat('json')}
                                     className="w-4 h-4 text-teal-600"
                                 />
                                 <div>
-                                    <span className="text-sm font-medium text-slate-700">Full entries</span>
-                                    <p className="text-xs text-slate-500">With all metadata and tags</p>
+                                    <span className="text-sm font-medium text-slate-200">JSON</span>
+                                    <p className="text-xs text-slate-500">Full entries with metadata</p>
                                 </div>
                             </label>
-                            <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors">
+                            <label className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${format === 'jsonl' ? 'border-teal-500 bg-teal-500/10' : 'border-slate-600 hover:border-slate-500'
+                                }`}>
+                                <input
+                                    type="radio"
+                                    name="format"
+                                    checked={format === 'jsonl'}
+                                    onChange={() => setFormat('jsonl')}
+                                    className="w-4 h-4 text-teal-600"
+                                />
+                                <div>
+                                    <span className="text-sm font-medium text-slate-200">JSONL</span>
+                                    <p className="text-xs text-slate-500">For LLM fine-tuning</p>
+                                </div>
+                            </label>
+                            <label className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${format === 'csv' ? 'border-teal-500 bg-teal-500/10' : 'border-slate-600 hover:border-slate-500'
+                                }`}>
+                                <input
+                                    type="radio"
+                                    name="format"
+                                    checked={format === 'csv'}
+                                    onChange={() => setFormat('csv')}
+                                    className="w-4 h-4 text-teal-600"
+                                />
+                                <div>
+                                    <span className="text-sm font-medium text-slate-200">CSV</span>
+                                    <p className="text-xs text-slate-500">Spreadsheet compatible</p>
+                                </div>
+                            </label>
+                            <label className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${format === 'chunks' ? 'border-teal-500 bg-teal-500/10' : 'border-slate-600 hover:border-slate-500'
+                                }`}>
                                 <input
                                     type="radio"
                                     name="format"
@@ -94,8 +161,8 @@ export default function ExportPage() {
                                     className="w-4 h-4 text-teal-600"
                                 />
                                 <div>
-                                    <span className="text-sm font-medium text-slate-700">Chunks only</span>
-                                    <p className="text-xs text-slate-500">Optimized for vector embedding</p>
+                                    <span className="text-sm font-medium text-slate-200">RAG Chunks</span>
+                                    <p className="text-xs text-slate-500">For vector embedding</p>
                                 </div>
                             </label>
                         </div>
@@ -132,46 +199,52 @@ export default function ExportPage() {
                         <div>
                             <h3 className="font-semibold text-slate-200">Export Preview</h3>
                             <p className="text-sm text-slate-500 mt-1">
-                                {(exportData as { totalEntries?: number; totalChunks?: number }).totalEntries || 0} entries
-                                {format === 'chunks' && `, ${(exportData as { totalChunks?: number }).totalChunks || 0} chunks`}
+                                {typeof exportData === 'string'
+                                    ? `${exportData.split('\n').length} lines`
+                                    : format === 'chunks'
+                                        ? `${(exportData as { totalEntries?: number }).totalEntries || 0} entries, ${(exportData as { totalChunks?: number }).totalChunks || 0} chunks`
+                                        : `${(exportData as { totalEntries?: number }).totalEntries || 0} entries`
+                                }
                             </p>
                         </div>
                         <button
-                            onClick={downloadJSON}
+                            onClick={handleDownload}
                             className="btn-primary"
                         >
                             <DownloadIcon />
-                            Download JSON
+                            Download {formatLabels[format]}
                         </button>
                     </div>
 
                     <div className="content-preview">
                         <pre className="text-sm">
-                            {JSON.stringify(exportData, null, 2).substring(0, 5000)}
-                            {JSON.stringify(exportData, null, 2).length > 5000 && '\n\n... [truncated]'}
+                            {typeof exportData === 'string'
+                                ? exportData.substring(0, 5000) + (exportData.length > 5000 ? '\n\n... [truncated]' : '')
+                                : JSON.stringify(exportData, null, 2).substring(0, 5000) + (JSON.stringify(exportData, null, 2).length > 5000 ? '\n\n... [truncated]' : '')
+                            }
                         </pre>
                     </div>
                 </div>
             )}
 
             {/* API Documentation */}
-            <div className="mt-8 card p-6 bg-slate-50 border-slate-200">
+            <div className="mt-8 card p-6 bg-slate-800/50 border-slate-700">
                 <div className="flex items-center gap-2 mb-4">
                     <CodeIcon />
                     <h3 className="font-semibold text-slate-200">API Endpoints</h3>
                 </div>
                 <div className="space-y-3 text-sm">
-                    <div className="bg-white rounded-lg p-4 border border-slate-200">
-                        <code className="text-teal-600 font-mono text-xs">GET /api/entries</code>
-                        <p className="text-slate-500 mt-1">List all KB entries with filter support</p>
+                    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                        <code className="text-teal-400 font-mono text-xs">GET /api/entries</code>
+                        <p className="text-slate-400 mt-1">List all KB entries with filter support</p>
                     </div>
-                    <div className="bg-white rounded-lg p-4 border border-slate-200">
-                        <code className="text-teal-600 font-mono text-xs">GET /api/export?format=chunks&ragStatus=APPROVED</code>
-                        <p className="text-slate-500 mt-1">Export chunked data for vector embedding</p>
+                    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                        <code className="text-teal-400 font-mono text-xs">GET /api/export?format=chunks&ragStatus=APPROVED</code>
+                        <p className="text-slate-400 mt-1">Export chunked data for vector embedding</p>
                     </div>
-                    <div className="bg-white rounded-lg p-4 border border-slate-200">
-                        <code className="text-teal-600 font-mono text-xs">POST /api/entries</code>
-                        <p className="text-slate-500 mt-1">Create new KB entry (JSON body)</p>
+                    <div className="bg-slate-900/50 rounded-lg p-4 border border-slate-700">
+                        <code className="text-teal-400 font-mono text-xs">POST /api/entries</code>
+                        <p className="text-slate-400 mt-1">Create new KB entry (JSON body)</p>
                     </div>
                 </div>
             </div>

@@ -33,11 +33,20 @@ class ScrapeRequest(BaseModel):
     url: str
     tags: List[str] = []
 
+class ContentChunk(BaseModel):
+    index: int
+    content: str
+    token_estimate: int
+    heading: Optional[str] = None
+
 class ScrapeResponse(BaseModel):
     url: str
     title: str
     markdown: str
+    chunks: List[ContentChunk]
     suggested_tags: Dict[str, List[str]]
+    quality_score: int
+    quality_reason: str
     metadata: dict
 
 # Clinical taxonomy for tag extraction
@@ -129,12 +138,133 @@ async def extract_tags_with_gemini(content: str) -> Dict[str, List[str]]:
             
     except json.JSONDecodeError as e:
         print(f"❌ Failed to parse Gemini response as JSON: {e}")
-        return {"modality": [], "population": [], "risk_factors": []}
+        return {"modality": [], "population": [], "risk_factors": [], "cultural_context": [], "intervention_type": []}
     except Exception as e:
         print(f"❌ Gemini extraction error: {e}")
         import traceback
         traceback.print_exc()
-        return {"modality": [], "population": [], "risk_factors": []}
+        return {"modality": [], "population": [], "risk_factors": [], "cultural_context": [], "intervention_type": []}
+
+
+def chunk_content(markdown: str, max_tokens: int = 500) -> List[Dict]:
+    """Split content into chunks optimized for RAG (targeting ~500 tokens per chunk)"""
+    chunks = []
+    current_chunk = []
+    current_tokens = 0
+    current_heading = None
+    
+    # Rough token estimate: ~4 chars per token
+    def estimate_tokens(text: str) -> int:
+        return len(text) // 4
+    
+    lines = markdown.split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Check if this is a heading
+        if line.startswith('#'):
+            # If we have content, save the current chunk
+            if current_chunk and current_tokens > 100:
+                chunks.append({
+                    "index": len(chunks),
+                    "content": '\n'.join(current_chunk),
+                    "token_estimate": current_tokens,
+                    "heading": current_heading
+                })
+                current_chunk = []
+                current_tokens = 0
+            
+            # Extract heading text
+            current_heading = line.lstrip('#').strip()
+            current_chunk.append(line)
+            current_tokens += estimate_tokens(line)
+        else:
+            line_tokens = estimate_tokens(line)
+            
+            # If adding this line exceeds max, save current chunk
+            if current_tokens + line_tokens > max_tokens and current_chunk:
+                chunks.append({
+                    "index": len(chunks),
+                    "content": '\n'.join(current_chunk),
+                    "token_estimate": current_tokens,
+                    "heading": current_heading
+                })
+                current_chunk = []
+                current_tokens = 0
+            
+            current_chunk.append(line)
+            current_tokens += line_tokens
+    
+    # Don't forget the last chunk
+    if current_chunk:
+        chunks.append({
+            "index": len(chunks),
+            "content": '\n'.join(current_chunk),
+            "token_estimate": current_tokens,
+            "heading": current_heading
+        })
+    
+    print(f"📦 Created {len(chunks)} chunks from content")
+    return chunks
+
+
+async def score_content_quality(content: str, url: str) -> tuple:
+    """Use Gemini to score content quality 1-5"""
+    
+    if not GEMINI_API_KEY:
+        return 3, "No AI scoring available"
+    
+    try:
+        prompt = f"""Rate the quality of this clinical/mental health content on a scale of 1-5:
+
+5 = Peer-reviewed, clinical guidelines, authoritative medical source
+4 = Professional medical content from reputable organization
+3 = General health information, moderate quality
+2 = Blog/opinion with some clinical value
+1 = Low quality, unverified, or off-topic content
+
+URL: {url}
+Content preview: {content[:2000]}
+
+Respond with JSON only: {{"score": <1-5>, "reason": "<brief explanation>"}}"""
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.2, "maxOutputTokens": 256}
+                },
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code != 200:
+                return 3, "Scoring unavailable"
+            
+            data = response.json()
+            text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            
+            # Clean and parse
+            text = text.strip()
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            text = text.strip()
+            
+            result = json.loads(text)
+            score = max(1, min(5, int(result.get("score", 3))))
+            reason = result.get("reason", "Quality assessed")[:200]
+            
+            print(f"⭐ Quality score: {score}/5 - {reason}")
+            return score, reason
+            
+    except Exception as e:
+        print(f"❌ Quality scoring error: {e}")
+        return 3, "Scoring error"
 
 
 def html_to_markdown(soup: BeautifulSoup) -> str:
@@ -229,15 +359,27 @@ async def scrape_url(request: ScrapeRequest):
             print("🤖 Extracting clinical tags with Gemini AI...")
             suggested_tags = await extract_tags_with_gemini(markdown)
             
+            # Chunk content for RAG
+            print("📦 Chunking content for RAG...")
+            chunks = chunk_content(markdown)
+            
+            # Score content quality
+            print("⭐ Scoring content quality...")
+            quality_score, quality_reason = await score_content_quality(markdown, request.url)
+            
             return ScrapeResponse(
                 url=request.url,
                 title=title,
                 markdown=markdown[:20000],  # Limit size
+                chunks=chunks,
                 suggested_tags=suggested_tags,
+                quality_score=quality_score,
+                quality_reason=quality_reason,
                 metadata={
                     "content_length": len(markdown),
                     "status_code": response.status_code,
                     "raw_html_size": len(response.text),
+                    "chunk_count": len(chunks),
                     "ai_tagged": bool(GEMINI_API_KEY)
                 }
             )

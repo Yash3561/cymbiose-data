@@ -66,10 +66,19 @@ const ChevronIcon = ({ direction }: { direction: 'left' | 'right' }) => (
   </svg>
 );
 
+const BatchIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+);
+
 const navItems = [
   { href: '/', icon: <DashboardIcon />, label: 'Dashboard', tourId: 'dashboard' },
   { href: '/catalog', icon: <CatalogIcon />, label: 'KB Catalog', tourId: 'catalog' },
   { href: '/scraper', icon: <ScraperIcon />, label: 'URL Scraper', tourId: 'scraper' },
+  { href: '/batch-import', icon: <BatchIcon />, label: 'Batch Import', tourId: 'batch-import' },
   { href: '/add-entry', icon: <AddIcon />, label: 'Add Entry', tourId: 'add-entry' },
   { href: '/export', icon: <ExportIcon />, label: 'Export', tourId: 'export' },
 ];
