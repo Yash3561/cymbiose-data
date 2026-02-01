@@ -146,6 +146,100 @@ async def extract_tags_with_gemini(content: str) -> Dict[str, List[str]]:
         return {"modality": [], "population": [], "risk_factors": [], "cultural_context": [], "intervention_type": []}
 
 
+# Content screening prompt for quality filtering
+CONTENT_SCREENING_PROMPT = """You are a clinical psychology content screening expert. Evaluate whether the following web content is appropriate for inclusion in a clinical mental health knowledge base.
+
+Evaluate these criteria:
+1. **Clinical Relevance** (Is this about mental health, therapy, psychology, or related clinical topics?)
+2. **Source Quality** (Does it appear to be from a reputable source - academic, government, professional organization?)
+3. **Evidence-Based** (Does it reference research, cite sources, or use evidence-based language?)
+4. **Cultural Sensitivity** (Is the content culturally aware and inclusive, not biased toward one demographic?)
+5. **Harmful Content** (Any misinformation, stigmatizing language, or potentially harmful advice?)
+
+Return a JSON object with:
+- "approved": true/false (should this be included in the knowledge base?)
+- "quality_score": 1-5 (1=poor, 5=excellent clinical quality)
+- "reason": Short explanation of your decision (max 100 chars)
+- "flags": Array of any concerns ["misinformation", "bias", "low_quality", "off_topic", "stigmatizing"]
+- "cultural_diversity_score": 1-5 (1=narrow perspective, 5=diverse/inclusive)
+- "demographics_covered": Array like ["Adults", "Adolescents", "LGBTQ+", "Multicultural", etc.]
+
+IMPORTANT: Return ONLY valid JSON, no markdown formatting.
+
+Content to screen:
+{content}
+
+JSON Response:"""
+
+async def screen_content_with_gemini(title: str, content: str, url: str) -> Dict:
+    """Use Gemini to screen content for clinical appropriateness and quality"""
+    
+    if not GEMINI_API_KEY:
+        # No API key - approve with default score
+        return {
+            "approved": True,
+            "quality_score": 3,
+            "reason": "No AI screening available",
+            "flags": [],
+            "cultural_diversity_score": 3,
+            "demographics_covered": []
+        }
+    
+    try:
+        # Prepare content for screening
+        content_sample = f"Title: {title}\nURL: {url}\n\nContent:\n{content[:6000]}"
+        
+        prompt = CONTENT_SCREENING_PROMPT.format(content=content_sample)
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{GEMINI_API_URL}?key={GEMINI_API_KEY}",
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": 0.2,
+                        "maxOutputTokens": 512
+                    }
+                },
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code != 200:
+                print(f"❌ Gemini screening error: {response.status_code}")
+                return {"approved": True, "quality_score": 3, "reason": "Screening failed", "flags": []}
+            
+            data = response.json()
+            text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            
+            # Clean up response
+            text = text.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            if text.startswith("```"):
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            text = text.strip()
+            
+            result = json.loads(text)
+            
+            print(f"🔍 AI Screening: {'✅ Approved' if result.get('approved') else '❌ Rejected'} | Score: {result.get('quality_score')}/5 | {result.get('reason', '')}")
+            
+            return {
+                "approved": result.get("approved", True),
+                "quality_score": result.get("quality_score", 3),
+                "reason": result.get("reason", "")[:200],
+                "flags": result.get("flags", []),
+                "cultural_diversity_score": result.get("cultural_diversity_score", 3),
+                "demographics_covered": result.get("demographics_covered", [])
+            }
+            
+    except Exception as e:
+        print(f"❌ Content screening error: {e}")
+        # On error, approve with caution score
+        return {"approved": True, "quality_score": 2, "reason": f"Screening error: {str(e)[:50]}", "flags": ["screening_failed"]}
+
+
 def chunk_content(markdown: str, max_tokens: int = 500) -> List[Dict]:
     """Split content into chunks optimized for RAG (targeting ~500 tokens per chunk)"""
     chunks = []
@@ -531,29 +625,46 @@ async def crawl_worker(job_id: str):
                 # Extract and parse content
                 soup = BeautifulSoup(html, "html.parser")
                 title = soup.title.string if soup.title else url
+                text_content = soup.get_text()
+                text_length = len(text_content)
                 
-                # Calculate quality score (simple heuristic)
-                text_length = len(soup.get_text())
-                has_mental_health_keywords = any(
-                    kw in html.lower() 
-                    for kw in ["mental health", "therapy", "counseling", "depression", "anxiety", "psychology", "clinical"]
+                # AI-powered content screening
+                screening_result = await screen_content_with_gemini(
+                    title=title[:200] if title else url,
+                    content=text_content,
+                    url=url
                 )
                 
-                quality = 3  # Default
-                if text_length > 2000 and has_mental_health_keywords:
-                    quality = 5
-                elif text_length > 1000 and has_mental_health_keywords:
-                    quality = 4
-                elif text_length < 500:
-                    quality = 2
+                # Skip rejected content
+                if not screening_result.get("approved", True):
+                    print(f"🚫 Rejected: {url} | Reason: {screening_result.get('reason', 'Unknown')}")
+                    job["urls_failed"] += 1
+                    job["scraped_urls"].append({
+                        "url": url,
+                        "title": f"[REJECTED] {title[:100] if title else url}",
+                        "depth": depth,
+                        "quality_score": 0,
+                        "content_length": text_length,
+                        "rejected": True,
+                        "rejection_reason": screening_result.get("reason", "Did not pass AI screening"),
+                        "flags": screening_result.get("flags", []),
+                        "scraped_at": datetime.now().isoformat()
+                    })
+                    continue
                 
-                # Add to scraped results
+                quality = screening_result.get("quality_score", 3)
+                
+                # Add to scraped results with screening metadata
                 job["scraped_urls"].append({
                     "url": url,
                     "title": title[:200] if title else url,
                     "depth": depth,
                     "quality_score": quality,
+                    "cultural_diversity_score": screening_result.get("cultural_diversity_score", 3),
+                    "demographics_covered": screening_result.get("demographics_covered", []),
                     "content_length": text_length,
+                    "ai_screening_reason": screening_result.get("reason", ""),
+                    "flags": screening_result.get("flags", []),
                     "scraped_at": datetime.now().isoformat()
                 })
                 job["urls_scraped"] += 1
