@@ -111,8 +111,8 @@ model KBChunk {
   
   // Embedding status
   embedded        Boolean  @default(false)
-  embeddingModel  String?  // e.g., "text-embedding-3-small"
-  embeddingVector Bytes?   // Store as binary for efficiency
+  embeddingModel  String?  @default("text-embedding-004")
+  // embeddingVector is managed manually via SQL to avoid Prisma type issues
   
   createdAt       DateTime @default(now())
   
