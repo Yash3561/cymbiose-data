@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, createContext, useContext } from 'react';
 import { OnboardingTour } from '@/components/OnboardingTour';
+import { createClient } from '@/utils/supabase/client';
+import React from 'react';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -108,12 +110,26 @@ const navItems = [
   { href: '/export', icon: <ExportIcon />, label: 'Export', tourId: 'export' },
 ];
 
+const LogoutIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="16 17 21 12 16 7" />
+    <line x1="21" y1="12" x2="9" y2="12" />
+  </svg>
+);
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const supabase = createClient();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  };
 
   return (
     <html lang="en">
@@ -171,6 +187,15 @@ export default function RootLayout({
                   </span>
                 </div>
                 <p className={`text-xs text-slate-500 mt-2 ${collapsed ? 'hidden' : ''}`}>v1.0.0</p>
+
+                <button
+                  onClick={handleLogout}
+                  className={`mt-4 w-full flex items-center gap-3 px-2 py-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors ${collapsed ? 'justify-center' : ''}`}
+                  title={collapsed ? 'Sign Out' : undefined}
+                >
+                  <LogoutIcon />
+                  <span className={`text-sm font-medium ${collapsed ? 'hidden' : ''}`}>Sign Out</span>
+                </button>
               </div>
             </nav>
 

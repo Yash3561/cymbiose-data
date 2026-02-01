@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
             { key: 'kbId', label: 'KB ID', type: 'string' },
             { key: 'title', label: 'Title', type: 'string' },
             { key: 'sourceType', label: 'Source Type', type: 'string' },
-            { key: 'sourceUrl', label: 'Source URL', type: 'string' },
+            { key: 'urlOrLocation', label: 'Source URL', type: 'string' },
             { key: 'authorOrganization', label: 'Author/Org', type: 'string' },
             { key: 'sourceQualityScore', label: 'Quality', type: 'number' },
             { key: 'ragInclusionStatus', label: 'Status', type: 'string' },

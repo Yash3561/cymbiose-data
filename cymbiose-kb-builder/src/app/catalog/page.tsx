@@ -19,6 +19,9 @@ interface KBEntry {
     summary: string | null;
     tagsModality: string[];
     tagsCulturalContext: string[];
+    tagsPopulation: string[];
+    tagsRiskLanguage: string[];
+    tagsInterventionCategory: string[];
     ragInclusionStatus: string;
     sourceQualityScore: number | null;
     dateAdded: string;
@@ -274,12 +277,28 @@ export default function CatalogPage() {
                                     <td className="px-4 py-3 text-slate-400">{formatSourceType(entry.sourceType)}</td>
                                     <td className="px-4 py-3">
                                         <div className="flex flex-wrap gap-1">
-                                            {entry.tagsModality.slice(0, 2).map(t => (
-                                                <span key={t} className="tag tag-modality">{t}</span>
-                                            ))}
-                                            {entry.tagsModality.length > 2 && (
-                                                <span className="text-xs text-slate-500">+{entry.tagsModality.length - 2}</span>
-                                            )}
+                                            {(() => {
+                                                const allTags = [
+                                                    ...(entry.tagsModality || []),
+                                                    ...(entry.tagsPopulation || []),
+                                                    ...(entry.tagsInterventionCategory || []),
+                                                    ...(entry.tagsCulturalContext || []),
+                                                    ...(entry.tagsRiskLanguage || [])
+                                                ];
+                                                const displayTags = allTags.slice(0, 3);
+                                                const remaining = allTags.length - 3;
+
+                                                return (
+                                                    <>
+                                                        {displayTags.map((t, i) => (
+                                                            <span key={i} className="tag tag-modality opacity-90">{t}</span>
+                                                        ))}
+                                                        {remaining > 0 && (
+                                                            <span className="text-xs text-slate-500">+{remaining}</span>
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
                                     </td>
                                     <td className="px-4 py-3 text-center">
