@@ -3,6 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
+interface KBChunk {
+    id: string;
+    chunkIndex: number;
+    content: string;
+    tokenCount: number;
+}
+
 interface KBEntry {
     id: string;
     kbId: string;
@@ -16,6 +23,7 @@ interface KBEntry {
     sourceQualityScore: number | null;
     dateAdded: string;
     _count: { chunks: number };
+    chunks?: KBChunk[];
 }
 
 // Icon Components
@@ -54,6 +62,15 @@ const XIcon = () => (
     </svg>
 );
 
+const ChunksIcon = () => (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+);
+
 export default function CatalogPage() {
     const [entries, setEntries] = useState<KBEntry[]>([]);
     const [loading, setLoading] = useState(true);
@@ -64,6 +81,22 @@ export default function CatalogPage() {
     const [qualityFilter, setQualityFilter] = useState('');
     const [editingEntry, setEditingEntry] = useState<KBEntry | null>(null);
     const [editForm, setEditForm] = useState({ title: '', summary: '', ragInclusionStatus: '' });
+    const [viewingChunks, setViewingChunks] = useState<{ entry: KBEntry; chunks: KBChunk[] } | null>(null);
+    const [loadingChunks, setLoadingChunks] = useState(false);
+
+    async function loadChunks(entry: KBEntry) {
+        setLoadingChunks(true);
+        try {
+            const res = await fetch(`/api/entries/${entry.id}/chunks`);
+            const chunks = await res.json();
+            setViewingChunks({ entry, chunks: Array.isArray(chunks) ? chunks : [] });
+        } catch (err) {
+            console.error('Failed to load chunks:', err);
+            setViewingChunks({ entry, chunks: [] });
+        } finally {
+            setLoadingChunks(false);
+        }
+    }
 
     // Debounce search input
     useEffect(() => {
@@ -143,9 +176,10 @@ export default function CatalogPage() {
 
             {/* Filters */}
             <div className="card p-4 mb-6">
-                <div className="flex gap-4">
-                    <div className="flex-1 relative">
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                <div className="flex flex-wrap gap-4">
+                    {/* Search Input - explicit sizing */}
+                    <div className="relative" style={{ minWidth: '280px', flex: '1 1 280px' }}>
+                        <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                             <SearchIcon />
                         </div>
                         <input
@@ -153,7 +187,8 @@ export default function CatalogPage() {
                             placeholder="Search by title or KB ID..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="input pl-10"
+                            className="input pl-10 w-full"
+                            style={{ color: '#f1f5f9', backgroundColor: '#334155' }}
                         />
                     </div>
                     <select
@@ -262,6 +297,16 @@ export default function CatalogPage() {
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex gap-1">
+                                            {entry._count?.chunks > 0 && (
+                                                <button
+                                                    onClick={() => loadChunks(entry)}
+                                                    className="icon-btn text-teal-400 hover:bg-teal-500/20"
+                                                    title="View chunks"
+                                                    disabled={loadingChunks}
+                                                >
+                                                    <ChunksIcon />
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() => openEditModal(entry)}
                                                 className="icon-btn edit"
@@ -348,6 +393,52 @@ export default function CatalogPage() {
                             <button onClick={saveEdit} className="btn-primary">
                                 Save Changes
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Chunks Modal */}
+            {viewingChunks && (
+                <div className="modal-overlay" onClick={() => setViewingChunks(null)}>
+                    <div className="modal-content max-w-4xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4">
+                            <div>
+                                <h2 className="text-lg font-semibold text-slate-100">
+                                    Chunks for: {viewingChunks.entry.title}
+                                </h2>
+                                <p className="text-sm text-slate-400 mt-1">
+                                    {viewingChunks.chunks.length} chunks • {viewingChunks.entry.kbId}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setViewingChunks(null)}
+                                className="text-slate-400 hover:text-slate-200"
+                            >
+                                <XIcon />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+                            {viewingChunks.chunks.length === 0 ? (
+                                <p className="text-slate-500 text-center py-8">No chunks found</p>
+                            ) : (
+                                viewingChunks.chunks.map(chunk => (
+                                    <div key={chunk.id} className="bg-slate-700/50 rounded-lg p-4">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-xs font-semibold text-teal-400">
+                                                Chunk #{chunk.chunkIndex + 1}
+                                            </span>
+                                            <span className="text-xs text-slate-500">
+                                                {chunk.tokenCount} tokens
+                                            </span>
+                                        </div>
+                                        <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono overflow-hidden" style={{ maxHeight: '200px' }}>
+                                            {chunk.content}
+                                        </pre>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>
