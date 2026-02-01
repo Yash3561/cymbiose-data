@@ -108,6 +108,19 @@ export async function POST(request: NextRequest) {
             }
         });
 
+        // Create chunks if provided
+        if (body.chunks && Array.isArray(body.chunks) && body.chunks.length > 0) {
+            await prisma.kBChunk.createMany({
+                data: body.chunks.map((chunk: { content: string; tokenCount?: number; chunkIndex: number }) => ({
+                    kbEntryId: entry.id,
+                    content: chunk.content,
+                    tokenCount: chunk.tokenCount || Math.ceil(chunk.content.length / 4),
+                    chunkIndex: chunk.chunkIndex
+                }))
+            });
+            console.log(`✅ Created ${body.chunks.length} chunks for entry ${entry.kbId}`);
+        }
+
         return NextResponse.json(entry, { status: 201 });
     } catch (error) {
         console.error('Error creating KB entry:', error);

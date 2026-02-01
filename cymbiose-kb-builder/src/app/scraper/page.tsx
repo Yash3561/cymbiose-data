@@ -143,13 +143,20 @@ export default function ScraperPage() {
                     accessType: 'PUBLIC',
                     rawContent: scrapedData.markdown,
                     summary: scrapedData.markdown?.substring(0, 500),
+                    sourceQualityScore: scrapedData.quality_score,
                     tagsModality: scrapedData.suggested_tags?.modality || [],
                     tagsPopulation: scrapedData.suggested_tags?.population || [],
                     tagsRiskLanguage: scrapedData.suggested_tags?.risk_factors || [],
                     tagsCulturalContext: scrapedData.suggested_tags?.cultural_context || [],
                     tagsInterventionCategory: scrapedData.suggested_tags?.intervention_type || [],
                     ragInclusionStatus: 'PENDING',
-                    addedBy: 'URL Scraper'
+                    addedBy: 'URL Scraper',
+                    // Include chunks from crawler
+                    chunks: scrapedData.chunks?.map(c => ({
+                        content: c.content,
+                        tokenCount: c.token_estimate,
+                        chunkIndex: c.index
+                    })) || []
                 })
             });
 
