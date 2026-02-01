@@ -9,6 +9,10 @@ interface Stats {
   sourceTypes: { type: string; count: number }[];
   ragStatuses: { status: string; count: number }[];
   tagCoverage: { withModality: number; withCultural: number; total: number };
+  qualityStats?: {
+    distribution: { score: number | null; count: number }[];
+    average: number;
+  };
   recentEntries: {
     id: string;
     kbId: string;
@@ -199,23 +203,60 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Quick Actions */}
+        {/* Quality Distribution */}
         <div className="card p-6">
-          <h3 className="font-semibold text-slate-200 mb-4">Quick Actions</h3>
-          <div className="space-y-3">
-            <Link href="/add-entry" className="btn-primary w-full">
-              <PlusIcon />
-              Add New Entry
-            </Link>
-            <Link href="/scraper" className="btn-secondary w-full">
-              <GlobeIcon />
-              Scrape URL
-            </Link>
-            <Link href="/export" className="btn-secondary w-full">
-              <ExportIcon />
-              Export KB
-            </Link>
-          </div>
+          <h3 className="font-semibold text-slate-200 mb-4">Quality Distribution</h3>
+          {stats?.qualityStats?.distribution && stats.qualityStats.distribution.length > 0 ? (
+            <div className="space-y-2">
+              {[5, 4, 3, 2, 1].map(score => {
+                const item = stats.qualityStats?.distribution.find(d => d.score === score);
+                const count = item?.count || 0;
+                const maxCount = Math.max(...stats.qualityStats!.distribution.map(d => d.count), 1);
+                const width = (count / maxCount) * 100;
+                return (
+                  <div key={score} className="flex items-center gap-2">
+                    <span className="text-amber-400 text-sm w-20">{'★'.repeat(score)}</span>
+                    <div className="flex-1 bg-slate-700 rounded-full h-4 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-500"
+                        style={{ width: `${width}%` }}
+                      />
+                    </div>
+                    <span className="text-sm text-slate-400 w-8 text-right">{count}</span>
+                  </div>
+                );
+              })}
+              <div className="mt-4 pt-3 border-t border-slate-700">
+                <span className="text-sm text-slate-400">Average: </span>
+                <span className="text-amber-400 font-semibold">{stats.qualityStats.average.toFixed(1)} ★</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">No quality scores yet</p>
+          )}
+        </div>
+      </div>
+
+      {/* Quick Actions Row */}
+      <div className="mt-6 card p-6">
+        <h3 className="font-semibold text-slate-200 mb-4">Quick Actions</h3>
+        <div className="flex gap-3">
+          <Link href="/add-entry" className="btn-primary">
+            <PlusIcon />
+            Add New Entry
+          </Link>
+          <Link href="/scraper" className="btn-secondary">
+            <GlobeIcon />
+            Scrape URL
+          </Link>
+          <Link href="/batch-import" className="btn-secondary">
+            <PlusIcon />
+            Batch Import
+          </Link>
+          <Link href="/export" className="btn-secondary">
+            <ExportIcon />
+            Export KB
+          </Link>
         </div>
       </div>
 

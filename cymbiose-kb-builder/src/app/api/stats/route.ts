@@ -43,6 +43,19 @@ export async function GET() {
             where: { tagsCulturalContext: { isEmpty: false } }
         });
 
+        // Quality score distribution
+        const qualityDistribution = await prisma.kBEntry.groupBy({
+            by: ['sourceQualityScore'],
+            _count: { id: true },
+            where: { sourceQualityScore: { not: null } }
+        });
+
+        // Average quality score
+        const avgQuality = await prisma.kBEntry.aggregate({
+            _avg: { sourceQualityScore: true },
+            where: { sourceQualityScore: { not: null } }
+        });
+
         return NextResponse.json({
             totalEntries,
             totalChunks,
@@ -58,6 +71,13 @@ export async function GET() {
                 withModality: entriesWithModality,
                 withCultural: entriesWithCultural,
                 total: totalEntries
+            },
+            qualityStats: {
+                distribution: qualityDistribution.map(q => ({
+                    score: q.sourceQualityScore,
+                    count: q._count.id
+                })),
+                average: avgQuality._avg.sourceQualityScore || 0
             },
             recentEntries
         });

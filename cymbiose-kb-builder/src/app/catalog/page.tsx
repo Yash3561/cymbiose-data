@@ -13,6 +13,7 @@ interface KBEntry {
     tagsModality: string[];
     tagsCulturalContext: string[];
     ragInclusionStatus: string;
+    sourceQualityScore: number | null;
     dateAdded: string;
     _count: { chunks: number };
 }
@@ -57,20 +58,30 @@ export default function CatalogPage() {
     const [entries, setEntries] = useState<KBEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [sourceFilter, setSourceFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [qualityFilter, setQualityFilter] = useState('');
     const [editingEntry, setEditingEntry] = useState<KBEntry | null>(null);
     const [editForm, setEditForm] = useState({ title: '', summary: '', ragInclusionStatus: '' });
 
+    // Debounce search input
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
     useEffect(() => {
         fetchEntries();
-    }, [sourceFilter, statusFilter]);
+    }, [sourceFilter, statusFilter, qualityFilter, debouncedSearch]);
 
     async function fetchEntries() {
         setLoading(true);
         const params = new URLSearchParams();
         if (sourceFilter) params.set('sourceType', sourceFilter);
         if (statusFilter) params.set('ragStatus', statusFilter);
+        if (qualityFilter) params.set('minQuality', qualityFilter);
+        if (debouncedSearch) params.set('search', debouncedSearch);
 
         const res = await fetch(`/api/entries?${params}`);
         const data = await res.json();
@@ -78,11 +89,7 @@ export default function CatalogPage() {
         setLoading(false);
     }
 
-    const filteredEntries = entries.filter(e =>
-        !search ||
-        e.title.toLowerCase().includes(search.toLowerCase()) ||
-        e.kbId.toLowerCase().includes(search.toLowerCase())
-    );
+    // Client-side filtering removed - using server-side filtering now
 
     async function deleteEntry(id: string) {
         if (!confirm('Are you sure you want to delete this entry?')) return;
@@ -173,6 +180,18 @@ export default function CatalogPage() {
                         <option value="EXCLUDED">Excluded</option>
                         <option value="REVIEW_NEEDED">Review Needed</option>
                     </select>
+                    <select
+                        value={qualityFilter}
+                        onChange={e => setQualityFilter(e.target.value)}
+                        className="input w-auto"
+                    >
+                        <option value="">All Quality</option>
+                        <option value="5">★★★★★ (5)</option>
+                        <option value="4">★★★★☆ (4+)</option>
+                        <option value="3">★★★☆☆ (3+)</option>
+                        <option value="2">★★☆☆☆ (2+)</option>
+                        <option value="1">★☆☆☆☆ (1+)</option>
+                    </select>
                 </div>
             </div>
 
@@ -183,7 +202,7 @@ export default function CatalogPage() {
                         <div className="skeleton h-8 w-48 mx-auto mb-4"></div>
                         <div className="skeleton h-4 w-32 mx-auto"></div>
                     </div>
-                ) : filteredEntries.length === 0 ? (
+                ) : entries.length === 0 ? (
                     <div className="p-12 text-center">
                         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-700 flex items-center justify-center">
                             <svg className="w-8 h-8 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -204,13 +223,14 @@ export default function CatalogPage() {
                                 <th className="px-4 py-3 font-medium">Title</th>
                                 <th className="px-4 py-3 font-medium">Type</th>
                                 <th className="px-4 py-3 font-medium">Tags</th>
+                                <th className="px-4 py-3 font-medium text-center">Quality</th>
                                 <th className="px-4 py-3 font-medium text-center">Chunks</th>
                                 <th className="px-4 py-3 font-medium">Status</th>
                                 <th className="px-4 py-3 font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredEntries.map(entry => (
+                            {entries.map(entry => (
                                 <tr key={entry.id} className="table-row">
                                     <td className="px-4 py-3 font-mono text-xs text-slate-500">{entry.kbId}</td>
                                     <td className="px-4 py-3 max-w-[250px] truncate font-medium text-slate-200" title={entry.title}>
@@ -226,6 +246,15 @@ export default function CatalogPage() {
                                                 <span className="text-xs text-slate-500">+{entry.tagsModality.length - 2}</span>
                                             )}
                                         </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                        {entry.sourceQualityScore ? (
+                                            <span className="text-amber-400" title={`Quality: ${entry.sourceQualityScore}/5`}>
+                                                {'★'.repeat(entry.sourceQualityScore)}
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-600">—</span>
+                                        )}
                                     </td>
                                     <td className="px-4 py-3 text-center text-slate-400">{entry._count?.chunks || 0}</td>
                                     <td className="px-4 py-3">
@@ -257,7 +286,7 @@ export default function CatalogPage() {
             </div>
 
             <p className="text-xs text-slate-500 mt-4">
-                Showing {filteredEntries.length} of {entries.length} entries
+                Showing {entries.length} entries
             </p>
 
             {/* Edit Modal */}

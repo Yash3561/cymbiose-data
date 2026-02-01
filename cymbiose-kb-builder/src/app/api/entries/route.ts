@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
         const sourceType = searchParams.get('sourceType');
         const ragStatus = searchParams.get('ragStatus');
         const search = searchParams.get('search');
+        const minQuality = searchParams.get('minQuality');
 
         const where: Record<string, unknown> = {};
 
@@ -17,6 +18,10 @@ export async function GET(request: NextRequest) {
 
         if (ragStatus) {
             where.ragInclusionStatus = ragStatus;
+        }
+
+        if (minQuality) {
+            where.sourceQualityScore = { gte: parseInt(minQuality) };
         }
 
         if (search) {
