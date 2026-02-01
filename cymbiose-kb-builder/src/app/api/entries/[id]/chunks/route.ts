@@ -10,7 +10,7 @@ export async function GET(
         const { id } = await params;
 
         const chunks = await prisma.kBChunk.findMany({
-            where: { entryId: id },
+            where: { kbEntryId: id },
             orderBy: { chunkIndex: 'asc' },
             select: {
                 id: true,
