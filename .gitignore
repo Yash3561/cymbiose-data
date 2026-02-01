@@ -1,0 +1,21 @@
+# Environment files
+**/.env
+**/.env.local
+
+# Dependencies and build
+**/node_modules/
+**/.next/
+**/venv/
+**/__pycache__/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Diagram files (optional - remove if you want to keep)
+*.png
+*.txt

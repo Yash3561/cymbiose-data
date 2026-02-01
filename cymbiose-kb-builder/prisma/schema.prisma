@@ -1,0 +1,301 @@
+// Prisma schema for Cymbiose KB Catalog
+// Production-grade schema based on Brandi's architecture document
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// MAIN KB ENTRY - Matches Brandi's Excel catalog schema exactly
+// ============================================================================
+model KBEntry {
+  id                    String   @id @default(cuid())
+  kbId                  String   @unique // LIT_0001, BLOG_0001, DATA_0001
+  
+  // Source Classification (from architecture diagram)
+  sourceType            SourceType
+  sourceCategory        SourceCategory  // Maps to diagram sections
+  
+  // Basic Metadata
+  title                 String
+  authorOrganization    String?
+  year                  Int?
+  urlOrLocation         String?
+  accessType            AccessType @default(INTERNAL)
+  license               String?
+  peerReviewed          Boolean @default(false)
+  sourceQualityScore    Int?     @db.SmallInt // 1-5
+  
+  // Content
+  summary               String?  @db.Text
+  keyFindings           String?  @db.Text
+  evidenceLevel         EvidenceLevel?
+  rawContent            String?  @db.Text
+  
+  // Clinical Taxonomy Tags (from Brandi's document)
+  tagsModality          String[] // CBT, ACT, DBT, Relational, Integrative, etc.
+  tagsCulturalContext   String[] // collectivism, familism, intergenerational, etc.
+  tagsRiskLanguage      String[] // risk language present, SI, HI, etc.
+  tagsPopulation        String[] // Adults, Children, Perinatal, Veterans, etc.
+  tagsDocumentationStyle String[] // DAP, SOAP, BIRP, Narrative, etc.
+  tagsInterventionCategory String[] // Cognitive restructuring, Values work, etc.
+  tagsSupervision       Boolean @default(false)
+  tagsBiasType          String[] // Types of bias from CBRT taxonomy
+  
+  // Geography & Language
+  geography             String?
+  language              String   @default("English")
+  controlledVocabTerms  String[] // bias_type, cultural_context, modality, etc.
+  
+  // RAG Processing Status
+  ragInclusionStatus    RAGStatus @default(PENDING)
+  chunkingNotes         String?  @db.Text
+  chunkingStrategy      ChunkingStrategy?
+  
+  // Compliance & Rights
+  deIdentificationStatus DeIdentificationStatus @default(NA)
+  ipRightsStatus        IPRightsStatus @default(PENDING)
+  hipaaCompliant        Boolean @default(false)
+  
+  // Storage & Versioning
+  linkToRawFile         String?
+  storagePath           String?
+  checksumOrHash        String?
+  version               Int      @default(1)
+  
+  // Audit Trail
+  addedBy               String
+  dateAdded             DateTime @default(now())
+  lastReviewed          DateTime?
+  lastModifiedBy        String?
+  
+  // References
+  citationReferenceIds  String[]
+  referenceFormat       ReferenceFormat?
+  notes                 String?  @db.Text
+  
+  // Relations
+  chunks                KBChunk[]
+  auditLogs             AuditLog[]
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@index([sourceType])
+  @@index([sourceCategory])
+  @@index([ragInclusionStatus])
+  @@index([dateAdded])
+}
+
+// ============================================================================
+// KB CHUNKS - For vector embedding and RAG retrieval
+// ============================================================================
+model KBChunk {
+  id              String   @id @default(cuid())
+  kbEntryId       String
+  kbEntry         KBEntry  @relation(fields: [kbEntryId], references: [id], onDelete: Cascade)
+  
+  chunkIndex      Int
+  content         String   @db.Text
+  tokenCount      Int?
+  
+  // Inherited tags for retrieval filtering
+  tagsModality    String[]
+  tagsCultural    String[]
+  tagsPopulation  String[]
+  
+  // Embedding status
+  embedded        Boolean  @default(false)
+  embeddingModel  String?  // e.g., "text-embedding-3-small"
+  embeddingVector Bytes?   // Store as binary for efficiency
+  
+  createdAt       DateTime @default(now())
+  
+  @@unique([kbEntryId, chunkIndex])
+  @@index([embedded])
+}
+
+// ============================================================================
+// SCRAPE JOBS - Track URL scraping operations
+// ============================================================================
+model ScrapeJob {
+  id              String      @id @default(cuid())
+  url             String
+  status          ScrapeStatus @default(PENDING)
+  
+  extractedTitle   String?
+  extractedContent String? @db.Text
+  contentLength    Int?
+  
+  error           String?
+  retryCount      Int      @default(0)
+  
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+  
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// AUDIT LOGS - Track all changes for compliance
+// ============================================================================
+model AuditLog {
+  id          String   @id @default(cuid())
+  kbEntryId   String
+  kbEntry     KBEntry  @relation(fields: [kbEntryId], references: [id], onDelete: Cascade)
+  
+  action      AuditAction
+  field       String?
+  oldValue    String?  @db.Text
+  newValue    String?  @db.Text
+  
+  performedBy String
+  performedAt DateTime @default(now())
+  ipAddress   String?
+  
+  @@index([kbEntryId])
+  @@index([performedAt])
+}
+
+// ============================================================================
+// DATA SOURCE REGISTRY - Track all configured data sources
+// ============================================================================
+model DataSource {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  category        SourceCategory
+  description     String?  @db.Text
+  
+  // Source configuration
+  baseUrl         String?
+  apiEndpoint     String?
+  credentials     String?  // Encrypted
+  
+  // Status
+  isActive        Boolean  @default(true)
+  lastSyncAt      DateTime?
+  syncFrequency   String?  // cron expression
+  
+  // Metrics
+  totalEntries    Int      @default(0)
+  lastError       String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([category])
+  @@index([isActive])
+}
+
+// ============================================================================
+// ENUMS - Based on Brandi's architecture diagram
+// ============================================================================
+
+// Source Types from KB Catalog
+enum SourceType {
+  LITERATURE      // Peer-reviewed articles, books
+  BLOG            // Mental health blogs, Cymbiose blog
+  DATASET         // AWS datasets, clinical data
+  WEBINAR         // Cymbiose webinars
+  COURSE          // CE courses
+  HANDBOOK        // Clinical handbooks
+  PODCAST         // Podcasts and talks
+  ARTICLE         // General articles
+  SUPERVISION     // Supervision playbooks
+  INTERNAL        // Cymbiose IP
+  QA              // Therapist Q&A
+  PROMPT          // Bias/culture prompts
+}
+
+// Source Categories from Architecture Diagram
+enum SourceCategory {
+  CYMBIOSE_IP           // Blogs, Webinars, Supervision playbooks, Bias prompts
+  CE_PARTNERS           // Affirm CE, Licenses, Course catalogs
+  MEDIA_LITERATURE      // Peer-reviewed, Clinical handbooks, Podcasts
+  CULTURE_DIAGNOSIS     // Mental health across cultures, Structural factors
+  BIAS_DETECTION        // Bias taxonomy, Ethical safeguards
+  CURATED_DATASETS      // AWS datasets, De-identified clinical data
+  EXPERT_ADVISORS       // TBA
+}
+
+enum AccessType {
+  INTERNAL
+  PUBLIC
+  PAYWALLED
+  RESTRICTED
+  PARTNER
+}
+
+enum RAGStatus {
+  PENDING
+  APPROVED
+  EXCLUDED
+  REVIEW_NEEDED
+  ARCHIVED
+}
+
+enum DeIdentificationStatus {
+  NA
+  REQUIRED
+  IN_PROGRESS
+  COMPLETED
+  VERIFIED
+}
+
+enum IPRightsStatus {
+  PENDING
+  CLEARED
+  RESTRICTED
+  PERMISSION_REQUIRED
+  LICENSED
+}
+
+enum ScrapeStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  RETRY
+}
+
+enum EvidenceLevel {
+  META_ANALYSIS
+  RCT
+  COHORT
+  CASE_STUDY
+  EXPERT_OPINION
+  ANECDOTAL
+}
+
+enum ChunkingStrategy {
+  SEMANTIC
+  FIXED_SIZE
+  PARAGRAPH
+  SENTENCE
+  CUSTOM
+}
+
+enum ReferenceFormat {
+  APA
+  MLA
+  CHICAGO
+  VANCOUVER
+  CUSTOM
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  EXPORT
+  SCRAPE
+}
