@@ -179,7 +179,7 @@ export default function CatalogPage() {
                 <div className="flex flex-wrap gap-4">
                     {/* Search Input - explicit sizing */}
                     <div className="relative" style={{ minWidth: '280px', flex: '1 1 280px' }}>
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
                             <SearchIcon />
                         </div>
                         <input
@@ -187,8 +187,8 @@ export default function CatalogPage() {
                             placeholder="Search by title or KB ID..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="input pl-10 w-full"
-                            style={{ color: '#f1f5f9', backgroundColor: '#334155' }}
+                            className="input w-full"
+                            style={{ color: '#f1f5f9', backgroundColor: '#334155', paddingLeft: '44px' }}
                         />
                     </div>
                     <select
