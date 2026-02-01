@@ -70,7 +70,7 @@ const LinkIcon = () => (
     </svg>
 );
 
-const CRAWLER_API = 'http://localhost:8001';
+const CRAWLER_API = process.env.NEXT_PUBLIC_CRAWLER_URL || 'http://localhost:8001';
 
 export default function CrawlerDashboardPage() {
     const [jobs, setJobs] = useState<CrawlJob[]>([]);
@@ -360,7 +360,7 @@ export default function CrawlerDashboardPage() {
                                     <div className="h-2 bg-slate-700 rounded-full overflow-hidden mt-3">
                                         <div
                                             className={`h-full transition-all ${job.status === 'running' ? 'bg-blue-500' :
-                                                    job.status === 'completed' ? 'bg-green-500' : 'bg-slate-500'
+                                                job.status === 'completed' ? 'bg-green-500' : 'bg-slate-500'
                                                 }`}
                                             style={{ width: `${getProgressPercent(job)}%` }}
                                         />

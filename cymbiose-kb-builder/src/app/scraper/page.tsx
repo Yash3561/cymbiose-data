@@ -94,7 +94,7 @@ export default function ScraperPage() {
         setError(null);
 
         try {
-            const response = await fetch('http://localhost:8001/scrape', {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_CRAWLER_URL || 'http://localhost:8001'}/scrape`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: url }),

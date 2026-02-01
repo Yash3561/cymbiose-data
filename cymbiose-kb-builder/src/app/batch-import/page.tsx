@@ -88,7 +88,7 @@ export default function BatchImportPage() {
 
             try {
                 // Scrape the URL
-                const scrapeResponse = await fetch('http://localhost:8001/scrape', {
+                const scrapeResponse = await fetch(`${process.env.NEXT_PUBLIC_CRAWLER_URL || 'http://localhost:8001'}/scrape`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url })
@@ -275,16 +275,16 @@ export default function BatchImportPage() {
                             <div
                                 key={idx}
                                 className={`flex items-center gap-3 p-3 rounded-lg ${result.status === 'success' ? 'bg-emerald-900/20' :
-                                        result.status === 'error' ? 'bg-red-900/20' :
-                                            result.status === 'processing' ? 'bg-teal-900/20' :
-                                                'bg-slate-800/50'
+                                    result.status === 'error' ? 'bg-red-900/20' :
+                                        result.status === 'processing' ? 'bg-teal-900/20' :
+                                            'bg-slate-800/50'
                                     }`}
                             >
                                 {/* Status Icon */}
                                 <div className={`flex-shrink-0 ${result.status === 'success' ? 'text-emerald-400' :
-                                        result.status === 'error' ? 'text-red-400' :
-                                            result.status === 'processing' ? 'text-teal-400' :
-                                                'text-slate-500'
+                                    result.status === 'error' ? 'text-red-400' :
+                                        result.status === 'processing' ? 'text-teal-400' :
+                                            'text-slate-500'
                                     }`}>
                                     {result.status === 'success' && <CheckIcon />}
                                     {result.status === 'error' && <XIcon />}
