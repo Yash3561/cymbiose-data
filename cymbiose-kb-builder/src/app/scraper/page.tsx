@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 interface ContentChunk {
@@ -69,7 +69,7 @@ const ExternalLinkIcon = () => (
     </svg>
 );
 
-export default function ScraperPage() {
+export function ScraperContent() {
     const searchParams = useSearchParams();
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -401,6 +401,18 @@ export default function ScraperPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function ScraperPage() {
+    return (
+        <Suspense fallback={
+            <div className="p-8 flex items-center justify-center">
+                <LoaderIcon />
+            </div>
+        }>
+            <ScraperContent />
+        </Suspense>
     );
 }
 
