@@ -19,6 +19,60 @@ interface Stats {
   }[];
 }
 
+// Icon Components
+const EntriesIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" />
+    <path d="M7 7h10M7 12h10M7 17h6" />
+  </svg>
+);
+
+const ChunksIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </svg>
+);
+
+const ApprovedIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
+
+const PendingIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const PlusIcon = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const GlobeIcon = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+  </svg>
+);
+
+const ExportIcon = () => (
+  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <polyline points="17 8 12 3 7 8" />
+    <line x1="12" y1="3" x2="12" y2="15" />
+  </svg>
+);
+
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,11 +97,16 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="p-8">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-slate-200 rounded w-1/4"></div>
+        <div className="space-y-6">
+          <div className="skeleton h-8 w-48"></div>
           <div className="grid grid-cols-4 gap-4">
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-24 bg-slate-200 rounded"></div>
+              <div key={i} className="skeleton h-28 rounded-xl"></div>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 gap-6">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="skeleton h-48 rounded-xl"></div>
             ))}
           </div>
         </div>
@@ -58,10 +117,10 @@ export default function Dashboard() {
   if (error) {
     return (
       <div className="p-8">
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <h3 className="font-semibold text-amber-800">Database Not Connected</h3>
-          <p className="text-sm text-amber-600 mt-1">
-            Run <code className="bg-amber-100 px-1 rounded">npx prisma db push</code> to set up the database.
+        <div className="card p-6 border-amber-200 bg-amber-50">
+          <h3 className="font-semibold text-amber-800">Database Connection Required</h3>
+          <p className="text-sm text-amber-600 mt-2">
+            Run <code className="bg-amber-100 px-2 py-1 rounded text-xs font-mono">npx prisma db push</code> to initialize the database.
           </p>
         </div>
       </div>
@@ -69,11 +128,11 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 fade-in">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-800">KB Builder Dashboard</h1>
-        <p className="text-slate-500 mt-1">Cymbiose Knowledge Base Data Acquisition</p>
+        <h1 className="text-2xl font-semibold text-slate-100">Dashboard</h1>
+        <p className="text-slate-400 mt-1">Clinical Knowledge Base Overview</p>
       </div>
 
       {/* Stats Cards */}
@@ -81,178 +140,202 @@ export default function Dashboard() {
         <StatCard
           title="Total Entries"
           value={stats?.totalEntries || 0}
-          icon="📚"
+          icon={<EntriesIcon />}
           color="teal"
         />
         <StatCard
           title="Total Chunks"
           value={stats?.totalChunks || 0}
-          icon="📄"
-          color="blue"
+          icon={<ChunksIcon />}
+          color="indigo"
         />
         <StatCard
-          title="Approved for RAG"
+          title="Approved"
           value={stats?.ragStatuses.find(r => r.status === 'APPROVED')?.count || 0}
-          icon="✅"
-          color="green"
+          icon={<ApprovedIcon />}
+          color="emerald"
         />
         <StatCard
-          title="Pending Review"
+          title="Pending"
           value={stats?.ragStatuses.find(r => r.status === 'PENDING')?.count || 0}
-          icon="⏳"
+          icon={<PendingIcon />}
           color="amber"
         />
       </div>
 
       <div className="grid grid-cols-3 gap-6">
         {/* Source Type Breakdown */}
-        <div className="bg-white rounded-lg border border-slate-200 p-5">
-          <h3 className="font-semibold text-slate-700 mb-4">Source Types</h3>
-          <div className="space-y-2">
+        <div className="card p-6">
+          <h3 className="font-semibold text-slate-200 mb-4">Source Types</h3>
+          <div className="space-y-3">
             {stats?.sourceTypes.map(s => (
               <div key={s.type} className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">{s.type}</span>
-                <span className="text-sm font-semibold text-slate-800">{s.count}</span>
+                <span className="text-sm text-slate-400">{formatSourceType(s.type)}</span>
+                <span className="text-sm font-semibold text-slate-200">{s.count}</span>
               </div>
             ))}
             {(!stats?.sourceTypes || stats.sourceTypes.length === 0) && (
-              <p className="text-sm text-slate-400">No entries yet</p>
+              <p className="text-sm text-slate-500">No entries yet</p>
             )}
           </div>
         </div>
 
         {/* Tag Coverage */}
-        <div className="bg-white rounded-lg border border-slate-200 p-5">
-          <h3 className="font-semibold text-slate-700 mb-4">Tag Coverage</h3>
-          <div className="space-y-3">
+        <div className="card p-6">
+          <h3 className="font-semibold text-slate-200 mb-4">Tag Coverage</h3>
+          <div className="space-y-4">
             <ProgressBar
               label="Modality Tags"
               value={stats?.tagCoverage.withModality || 0}
               total={stats?.tagCoverage.total || 1}
+              color="teal"
             />
             <ProgressBar
               label="Cultural Tags"
               value={stats?.tagCoverage.withCultural || 0}
               total={stats?.tagCoverage.total || 1}
+              color="amber"
             />
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-white rounded-lg border border-slate-200 p-5">
-          <h3 className="font-semibold text-slate-700 mb-4">Quick Actions</h3>
-          <div className="space-y-2">
-            <Link
-              href="/add-entry"
-              className="block w-full px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 text-center"
-            >
-              ➕ Add New Entry
+        <div className="card p-6">
+          <h3 className="font-semibold text-slate-200 mb-4">Quick Actions</h3>
+          <div className="space-y-3">
+            <Link href="/add-entry" className="btn-primary w-full">
+              <PlusIcon />
+              Add New Entry
             </Link>
-            <Link
-              href="/scraper"
-              className="block w-full px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 text-center"
-            >
-              🌐 Scrape URL
+            <Link href="/scraper" className="btn-secondary w-full">
+              <GlobeIcon />
+              Scrape URL
             </Link>
-            <Link
-              href="/export"
-              className="block w-full px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 text-center"
-            >
-              📤 Export KB
+            <Link href="/export" className="btn-secondary w-full">
+              <ExportIcon />
+              Export KB
             </Link>
           </div>
         </div>
       </div>
 
       {/* Recent Entries */}
-      <div className="mt-8 bg-white rounded-lg border border-slate-200 p-5">
-        <h3 className="font-semibold text-slate-700 mb-4">Recent Entries</h3>
+      <div className="mt-8 card p-6">
+        <h3 className="font-semibold text-slate-200 mb-4">Recent Entries</h3>
         {stats?.recentEntries && stats.recentEntries.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-100">
-                <th className="pb-2 font-medium">KB ID</th>
-                <th className="pb-2 font-medium">Title</th>
-                <th className="pb-2 font-medium">Type</th>
-                <th className="pb-2 font-medium">Status</th>
-                <th className="pb-2 font-medium">Added</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.recentEntries.map(entry => (
-                <tr key={entry.id} className="border-b border-slate-50 hover:bg-slate-50">
-                  <td className="py-2 font-mono text-xs">{entry.kbId}</td>
-                  <td className="py-2 max-w-[200px] truncate">{entry.title}</td>
-                  <td className="py-2">{entry.sourceType}</td>
-                  <td className="py-2">
-                    <StatusBadge status={entry.ragInclusionStatus} />
-                  </td>
-                  <td className="py-2 text-slate-400">
-                    {new Date(entry.dateAdded).toLocaleDateString()}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-400 border-b border-slate-700">
+                  <th className="pb-3 font-medium">KB ID</th>
+                  <th className="pb-3 font-medium">Title</th>
+                  <th className="pb-3 font-medium">Type</th>
+                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 font-medium">Added</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {stats.recentEntries.map(entry => (
+                  <tr key={entry.id} className="table-row">
+                    <td className="py-3 font-mono text-xs text-slate-500">{entry.kbId}</td>
+                    <td className="py-3 max-w-[200px] truncate font-medium text-slate-200">{entry.title}</td>
+                    <td className="py-3 text-slate-400">{formatSourceType(entry.sourceType)}</td>
+                    <td className="py-3">
+                      <StatusBadge status={entry.ragInclusionStatus} />
+                    </td>
+                    <td className="py-3 text-slate-400">
+                      {new Date(entry.dateAdded).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
-          <p className="text-sm text-slate-400">No entries yet. Add your first entry to get started!</p>
+          <p className="text-sm text-slate-400">No entries yet. Add your first entry to get started.</p>
         )}
       </div>
     </div>
   );
 }
 
-function StatCard({ title, value, icon, color }: { title: string; value: number; icon: string; color: string }) {
-  const colorClasses: Record<string, string> = {
-    teal: 'bg-teal-50 border-teal-100',
-    blue: 'bg-blue-50 border-blue-100',
-    green: 'bg-green-50 border-green-100',
-    amber: 'bg-amber-50 border-amber-100'
+function formatSourceType(type: string): string {
+  const labels: Record<string, string> = {
+    RESEARCH: 'Research',
+    CLINICAL_GUIDELINE: 'Clinical Guideline',
+    BLOG: 'Blog',
+    BOOK: 'Book',
+    VIDEO_TRANSCRIPT: 'Video',
+    WORKSHEET: 'Worksheet',
+    OTHER: 'Other'
+  };
+  return labels[type] || type;
+}
+
+function StatCard({ title, value, icon, color }: { title: string; value: number; icon: React.ReactNode; color: string }) {
+  const colorClasses: Record<string, { bg: string; icon: string }> = {
+    teal: { bg: 'bg-teal-50', icon: 'text-teal-600' },
+    indigo: { bg: 'bg-indigo-50', icon: 'text-indigo-600' },
+    emerald: { bg: 'bg-emerald-50', icon: 'text-emerald-600' },
+    amber: { bg: 'bg-amber-50', icon: 'text-amber-600' }
   };
 
+  const styles = colorClasses[color] || colorClasses.teal;
+
   return (
-    <div className={`rounded-lg border p-4 ${colorClasses[color]}`}>
-      <div className="flex items-center gap-2">
-        <span className="text-2xl">{icon}</span>
+    <div className="stat-card">
+      <div className="flex items-start justify-between">
         <div>
-          <p className="text-2xl font-bold text-slate-800">{value}</p>
-          <p className="text-xs text-slate-500">{title}</p>
+          <p className="stat-value">{value}</p>
+          <p className="stat-label">{title}</p>
+        </div>
+        <div className={`p-2 rounded-lg ${styles.bg}`}>
+          <span className={styles.icon}>{icon}</span>
         </div>
       </div>
     </div>
   );
 }
 
-function ProgressBar({ label, value, total }: { label: string; value: number; total: number }) {
+function ProgressBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
   const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+  const barColor = color === 'amber' ? 'bg-amber-500' : 'bg-teal-500';
 
   return (
     <div>
-      <div className="flex justify-between text-xs mb-1">
+      <div className="flex justify-between text-sm mb-2">
         <span className="text-slate-600">{label}</span>
-        <span className="text-slate-500">{value}/{total}</span>
+        <span className="text-slate-900 font-medium">{percentage}%</span>
       </div>
       <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
         <div
-          className="h-full bg-teal-500 rounded-full transition-all"
+          className={`h-full ${barColor} rounded-full transition-all duration-500`}
           style={{ width: `${percentage}%` }}
         />
       </div>
+      <p className="text-xs text-slate-400 mt-1">{value} of {total} entries</p>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    PENDING: 'bg-amber-100 text-amber-700',
-    APPROVED: 'bg-green-100 text-green-700',
+    PENDING: 'badge-warning',
+    APPROVED: 'badge-success',
     EXCLUDED: 'bg-slate-100 text-slate-600',
-    REVIEW_NEEDED: 'bg-red-100 text-red-700'
+    REVIEW_NEEDED: 'badge-error'
+  };
+
+  const labels: Record<string, string> = {
+    PENDING: 'Pending',
+    APPROVED: 'Approved',
+    EXCLUDED: 'Excluded',
+    REVIEW_NEEDED: 'Review'
   };
 
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${styles[status] || styles.PENDING}`}>
-      {status}
+    <span className={`badge ${styles[status] || styles.PENDING}`}>
+      {labels[status] || status}
     </span>
   );
 }

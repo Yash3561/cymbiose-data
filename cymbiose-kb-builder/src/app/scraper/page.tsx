@@ -2,125 +2,366 @@
 
 import { useState } from 'react';
 
-export default function KBBuilder() {
+interface ScrapeData {
+    url: string;
+    title: string;
+    markdown: string;
+    suggested_tags?: {
+        modality?: string[];
+        population?: string[];
+        risk_factors?: string[];
+        cultural_context?: string[];
+        intervention_type?: string[];
+    };
+    metadata?: {
+        content_length?: number;
+        status_code?: number;
+        raw_html_size?: number;
+        ai_tagged?: boolean;
+    };
+}
+
+// Icon Components
+const SearchIcon = () => (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+);
+
+const LoaderIcon = () => (
+    <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+        <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+    </svg>
+);
+
+const CheckIcon = () => (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polyline points="20 6 9 17 4 12" />
+    </svg>
+);
+
+const XIcon = () => (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+);
+
+const ExternalLinkIcon = () => (
+    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        <polyline points="15 3 21 3 21 9" />
+        <line x1="10" y1="14" x2="21" y2="3" />
+    </svg>
+);
+
+export default function ScraperPage() {
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [scrapedData, setScrapedData] = useState<any>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+    const [scrapedData, setScrapedData] = useState<ScrapeData | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const handleScrape = async () => {
+        if (!url.trim()) return;
+
         setIsLoading(true);
         setScrapedData(null);
+        setError(null);
 
         try {
-            console.log('Sending request to crawler...');
             const response = await fetch('http://localhost:8001/scrape', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: url }),
             });
 
-            console.log('Response status:', response.status);
-
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Error response:', errorText);
-                throw new Error(`Scraping failed: ${response.status} - ${errorText}`);
+                const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+                throw new Error(errorData.detail || `Request failed: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log('Scraped data:', data);
             setScrapedData(data);
-        } catch (error: any) {
-            console.error('Fetch error:', error);
-            alert(`Error: ${error.message}`);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to scrape URL';
+            setError(message);
         } finally {
             setIsLoading(false);
         }
     };
 
-    return (
-        <div className="p-8 max-w-4xl mx-auto">
-            <h1 className="text-2xl font-bold mb-6 text-slate-800">KB Builder (Crawl4AI)</h1>
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && !isLoading) {
+            handleScrape();
+        }
+    };
 
-            <div className="flex gap-4 mb-8">
-                <input
-                    type="text"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://example.com/clinical-article"
-                    className="flex-1 p-3 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
-                />
-                <button
-                    onClick={handleScrape}
-                    disabled={isLoading}
-                    className="bg-teal-600 text-white px-6 py-3 rounded-lg hover:bg-teal-700 disabled:opacity-50 font-medium"
-                >
-                    {isLoading ? 'Crawling & Analyzing...' : '🕷️ Smart Scrape'}
-                </button>
+    const handleSaveToKB = async () => {
+        if (!scrapedData) return;
+
+        setIsSaving(true);
+        setSaveSuccess(false);
+
+        try {
+            // Generate a KB ID from the title
+            const kbId = `WEB_${Date.now().toString(36).toUpperCase()}`;
+
+            const response = await fetch('/api/entries', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    kbId,
+                    sourceType: 'BLOG',
+                    sourceCategory: 'CYMBIOSE_IP',
+                    title: scrapedData.title,
+                    urlOrLocation: scrapedData.url,
+                    accessType: 'PUBLIC',
+                    rawContent: scrapedData.markdown,
+                    summary: scrapedData.markdown?.substring(0, 500),
+                    tagsModality: scrapedData.suggested_tags?.modality || [],
+                    tagsPopulation: scrapedData.suggested_tags?.population || [],
+                    tagsRiskLanguage: scrapedData.suggested_tags?.risk_factors || [],
+                    tagsCulturalContext: scrapedData.suggested_tags?.cultural_context || [],
+                    tagsInterventionCategory: scrapedData.suggested_tags?.intervention_type || [],
+                    ragInclusionStatus: 'PENDING',
+                    addedBy: 'URL Scraper'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to save entry');
+            }
+
+            setSaveSuccess(true);
+            setTimeout(() => {
+                setScrapedData(null);
+                setUrl('');
+                setSaveSuccess(false);
+            }, 2000);
+
+        } catch (err) {
+            console.error('Save error:', err);
+            setError('Failed to save to knowledge base');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="p-8 fade-in">
+            {/* Header */}
+            <div className="mb-8">
+                <h1 className="text-2xl font-semibold text-slate-100">URL Scraper</h1>
+                <p className="text-slate-400 mt-1">Extract clean content from clinical websites</p>
             </div>
 
-            {scrapedData && (
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
+            {/* Search Input */}
+            <div className="card p-6 mb-6">
+                <div className="flex gap-4">
+                    <div className="flex-1 relative">
+                        <input
+                            type="url"
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder="Enter URL to scrape (e.g., https://healthline.com/health/...)"
+                            className="input pl-4 pr-4"
+                        />
+                    </div>
+                    <button
+                        onClick={handleScrape}
+                        disabled={isLoading || !url.trim()}
+                        className="btn-primary min-w-[140px]"
+                    >
+                        {isLoading ? (
+                            <>
+                                <LoaderIcon />
+                                Scraping...
+                            </>
+                        ) : (
+                            <>
+                                <SearchIcon />
+                                Scrape URL
+                            </>
+                        )}
+                    </button>
+                </div>
 
-                    {/* Header */}
-                    <div className="border-b pb-4">
-                        <h2 className="text-xl font-semibold text-slate-800">{scrapedData.title}</h2>
-                        <a href={scrapedData.url} target="_blank" className="text-sm text-teal-600 hover:underline">{scrapedData.url}</a>
+                {error && (
+                    <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-700">{error}</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Results */}
+            {scrapedData && (
+                <div className="card p-6 fade-in">
+                    {/* Title & URL */}
+                    <div className="border-b border-slate-700 pb-4 mb-6">
+                        <h2 className="text-xl font-semibold text-slate-100">{scrapedData.title}</h2>
+                        <a
+                            href={scrapedData.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-sm text-teal-400 hover:text-teal-300 mt-1"
+                        >
+                            {scrapedData.url}
+                            <ExternalLinkIcon />
+                        </a>
                     </div>
 
-                    {/* AI Suggested Tags */}
-                    <div className="bg-slate-50 p-4 rounded-lg">
-                        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">AI Suggested Tags</h3>
-                        <div className="grid grid-cols-3 gap-4">
-                            <div>
-                                <span className="text-xs font-semibold text-slate-400 block mb-1">MODALITY</span>
-                                <div className="flex flex-wrap gap-2">
-                                    {scrapedData.suggested_tags?.modality?.map((tag: string) => (
-                                        <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">{tag}</span>
-                                    ))}
-                                </div>
+                    {/* Metadata */}
+                    {scrapedData.metadata && (
+                        <div className="flex gap-4 mb-6">
+                            <div className="badge badge-success">
+                                {scrapedData.metadata.content_length?.toLocaleString()} characters
                             </div>
-                            <div>
-                                <span className="text-xs font-semibold text-slate-400 block mb-1">POPULATION</span>
-                                <div className="flex flex-wrap gap-2">
-                                    {scrapedData.suggested_tags?.population?.map((tag: string) => (
-                                        <span key={tag} className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">{tag}</span>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <span className="text-xs font-semibold text-slate-400 block mb-1">RISK FACTORS</span>
-                                <div className="flex flex-wrap gap-2">
-                                    {scrapedData.suggested_tags?.risk_factors?.map((tag: string) => (
-                                        <span key={tag} className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">{tag}</span>
-                                    ))}
-                                </div>
+                            <div className="badge bg-slate-700 text-slate-300">
+                                HTTP {scrapedData.metadata.status_code}
                             </div>
                         </div>
+                    )}
+
+                    {/* AI Suggested Tags */}
+                    <div className="bg-slate-800/50 rounded-lg p-5 mb-6">
+                        <div className="flex items-center gap-2 mb-4">
+                            <svg className="w-4 h-4 text-teal-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                                <path d="M2 17l10 5 10-5" />
+                                <path d="M2 12l10 5 10-5" />
+                            </svg>
+                            <h3 className="text-sm font-semibold text-teal-400 uppercase tracking-wider">
+                                AI Suggested Tags (Gemini)
+                            </h3>
+                            {scrapedData.metadata?.ai_tagged && (
+                                <span className="badge badge-success text-xs">AI Powered</span>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                            <TagColumn
+                                label="Modality"
+                                tags={scrapedData.suggested_tags?.modality || []}
+                                colorClass="tag-modality"
+                            />
+                            <TagColumn
+                                label="Population"
+                                tags={scrapedData.suggested_tags?.population || []}
+                                colorClass="tag-population"
+                            />
+                            <TagColumn
+                                label="Risk Factors"
+                                tags={scrapedData.suggested_tags?.risk_factors || []}
+                                colorClass="tag-risk"
+                            />
+                            <TagColumn
+                                label="Cultural"
+                                tags={scrapedData.suggested_tags?.cultural_context || []}
+                                colorClass="tag-cultural"
+                            />
+                            <TagColumn
+                                label="Intervention"
+                                tags={scrapedData.suggested_tags?.intervention_type || []}
+                                colorClass="tag-modality"
+                            />
+                        </div>
+                        {!scrapedData.suggested_tags?.modality?.length &&
+                            !scrapedData.suggested_tags?.population?.length &&
+                            !scrapedData.suggested_tags?.risk_factors?.length && (
+                                <p className="text-sm text-slate-500 italic mt-4">
+                                    No tags extracted. Make sure GEMINI_API_KEY is configured in the crawler .env file.
+                                </p>
+                            )}
                     </div>
 
                     {/* Content Preview */}
-                    <div>
-                        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-2">Clean Markdown Content</h3>
-                        <div className="bg-slate-900 text-slate-100 p-4 rounded-lg font-mono text-sm h-64 overflow-y-auto whitespace-pre-wrap">
-                            {scrapedData.markdown}
+                    <div className="mb-6">
+                        <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                            Extracted Content
+                        </h3>
+                        <div className="content-preview">
+                            {scrapedData.markdown || 'No content extracted'}
                         </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex justify-end gap-3 pt-4 border-t">
+                    {/* Actions */}
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-700">
                         <button
-                            onClick={() => setScrapedData(null)}
-                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+                            onClick={() => {
+                                setScrapedData(null);
+                                setSaveSuccess(false);
+                            }}
+                            className="btn-secondary"
+                            disabled={isSaving}
                         >
+                            <XIcon />
                             Discard
                         </button>
-                        <button className="px-4 py-2 bg-teal-600 text-white hover:bg-teal-700 rounded-lg">
-                            ✅ Save to KB
+                        <button
+                            onClick={handleSaveToKB}
+                            disabled={isSaving || saveSuccess}
+                            className={`btn-primary ${saveSuccess ? 'bg-emerald-600 hover:bg-emerald-600' : ''}`}
+                        >
+                            {isSaving ? (
+                                <>
+                                    <LoaderIcon />
+                                    Saving...
+                                </>
+                            ) : saveSuccess ? (
+                                <>
+                                    <CheckIcon />
+                                    Saved!
+                                </>
+                            ) : (
+                                <>
+                                    <CheckIcon />
+                                    Save to KB
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>
             )}
+
+            {/* Empty State */}
+            {!scrapedData && !isLoading && (
+                <div className="card p-12 text-center">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+                        <svg className="w-8 h-8 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="2" y1="12" x2="22" y2="12" />
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                        </svg>
+                    </div>
+                    <h3 className="text-lg font-medium text-slate-700">Enter a URL to scrape</h3>
+                    <p className="text-slate-500 mt-1">
+                        Extract clean markdown content from any clinical website
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function TagColumn({ label, tags, colorClass }: { label: string; tags: string[]; colorClass: string }) {
+    return (
+        <div>
+            <span className="text-xs font-medium text-slate-400 uppercase tracking-wide block mb-2">
+                {label}
+            </span>
+            <div className="flex flex-wrap gap-2">
+                {tags.length > 0 ? (
+                    tags.map(tag => (
+                        <span key={tag} className={`tag ${colorClass}`}>{tag}</span>
+                    ))
+                ) : (
+                    <span className="text-xs text-slate-300">—</span>
+                )}
+            </div>
         </div>
     );
 }

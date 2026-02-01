@@ -82,30 +82,33 @@ export default function AddEntryPage() {
     }
 
     const tabs = [
-        { id: 'basic', label: '📋 Basic Info', icon: '1' },
-        { id: 'content', label: '📝 Content', icon: '2' },
-        { id: 'tags', label: '🏷️ Tags', icon: '3' },
-        { id: 'status', label: '📊 Status', icon: '4' }
+        { id: 'basic', label: 'Basic Info', step: '1' },
+        { id: 'content', label: 'Content', step: '2' },
+        { id: 'tags', label: 'Tags', step: '3' },
+        { id: 'status', label: 'Status', step: '4' }
     ];
 
     return (
-        <div className="p-8 max-w-5xl">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-slate-800">Add KB Entry</h1>
-                <p className="text-slate-500">Create a new knowledge base entry with clinical taxonomy tags</p>
+        <div className="p-8 max-w-5xl fade-in">
+            <div className="mb-8">
+                <h1 className="text-2xl font-semibold text-slate-100">Add KB Entry</h1>
+                <p className="text-slate-400 mt-1">Create a new knowledge base entry with clinical taxonomy tags</p>
             </div>
 
             {/* Tab Navigation */}
-            <div className="flex gap-2 mb-6 border-b border-slate-200">
-                {tabs.map(tab => (
+            <div className="flex gap-1 mb-6 border-b border-slate-200">
+                {tabs.map((tab, idx) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
-                                ? 'border-teal-600 text-teal-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
+                            ? 'border-teal-600 text-teal-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-700'
                             }`}
                     >
+                        <span className={`w-5 h-5 rounded-full text-xs flex items-center justify-center ${activeTab === tab.id ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                            {tab.step}
+                        </span>
                         {tab.label}
                     </button>
                 ))}
@@ -114,7 +117,7 @@ export default function AddEntryPage() {
             <form onSubmit={handleSubmit}>
                 {/* Tab 1: Basic Info */}
                 {activeTab === 'basic' && (
-                    <section className="bg-white rounded-lg border border-slate-200 p-6">
+                    <section className="card p-6">
                         <h2 className="font-semibold text-slate-700 mb-4">Basic Information</h2>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -245,7 +248,7 @@ export default function AddEntryPage() {
 
                 {/* Tab 2: Content */}
                 {activeTab === 'content' && (
-                    <section className="bg-white rounded-lg border border-slate-200 p-6">
+                    <section className="card p-6">
                         <h2 className="font-semibold text-slate-700 mb-4">Content</h2>
                         <div className="space-y-4">
                             <div>
@@ -305,7 +308,7 @@ export default function AddEntryPage() {
 
                 {/* Tab 3: Tags */}
                 {activeTab === 'tags' && (
-                    <section className="bg-white rounded-lg border border-slate-200 p-6">
+                    <section className="card p-6">
                         <h2 className="font-semibold text-slate-700 mb-4">Clinical Taxonomy Tags</h2>
                         <div className="space-y-5">
                             <TagSection title="Modality" tags={TAG_OPTIONS.modality} selected={formData.tagsModality} onToggle={t => toggleTag('tagsModality', t)} color="modality" />
@@ -331,7 +334,7 @@ export default function AddEntryPage() {
 
                 {/* Tab 4: Status */}
                 {activeTab === 'status' && (
-                    <section className="bg-white rounded-lg border border-slate-200 p-6">
+                    <section className="card p-6">
                         <h2 className="font-semibold text-slate-700 mb-4">Status & Metadata</h2>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -440,9 +443,9 @@ export default function AddEntryPage() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="px-6 py-2 bg-teal-600 text-white font-medium rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                        className="btn-primary"
                     >
-                        {loading ? 'Creating...' : '✅ Create Entry'}
+                        {loading ? 'Creating...' : 'Create Entry'}
                     </button>
                 </div>
             </form>
@@ -473,8 +476,8 @@ function TagSection({
                         type="button"
                         onClick={() => onToggle(tag)}
                         className={`tag cursor-pointer transition-all ${selected.includes(tag)
-                                ? `tag-${color} ring-2 ring-offset-1 ring-teal-500`
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            ? `tag-${color} ring-2 ring-offset-1 ring-teal-500`
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                             }`}
                     >
                         {tag}
