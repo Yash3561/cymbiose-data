@@ -89,10 +89,18 @@ const DataExplorerIcon = () => (
   </svg>
 );
 
+const CrawlerIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+  </svg>
+);
+
 const navItems = [
   { href: '/', icon: <DashboardIcon />, label: 'Dashboard', tourId: 'dashboard' },
   { href: '/catalog', icon: <CatalogIcon />, label: 'KB Catalog', tourId: 'catalog' },
   { href: '/data-explorer', icon: <DataExplorerIcon />, label: 'Data Explorer', tourId: 'data-explorer' },
+  { href: '/crawler-dashboard', icon: <CrawlerIcon />, label: 'Auto-Crawler', tourId: 'crawler' },
   { href: '/scraper', icon: <ScraperIcon />, label: 'URL Scraper', tourId: 'scraper' },
   { href: '/batch-import', icon: <BatchIcon />, label: 'Batch Import', tourId: 'batch-import' },
   { href: '/seed-urls', icon: <SeedIcon />, label: 'Seed URLs', tourId: 'seed-urls' },

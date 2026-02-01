@@ -393,8 +393,297 @@ async def scrape_url(request: ScrapeRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
+# ==================== AUTO-CRAWLER SYSTEM ====================
+
+import asyncio
+import re
+from urllib.parse import urljoin, urlparse
+from datetime import datetime
+from collections import deque
+import threading
+
+# In-memory storage for crawl jobs (in production, use Redis or database)
+crawl_jobs: Dict[str, dict] = {}
+crawl_locks: Dict[str, threading.Event] = {}
+
+class CrawlRequest(BaseModel):
+    seed_url: str
+    max_depth: int = 3
+    max_urls: int = 50
+    same_domain_only: bool = True
+    include_patterns: List[str] = []
+    exclude_patterns: List[str] = [r"\.pdf$", r"\.jpg$", r"\.png$", r"login", r"signup", r"cart"]
+
+class CrawlJobStatus(BaseModel):
+    id: str
+    seed_url: str
+    status: str  # pending, running, paused, completed, failed
+    max_depth: int
+    urls_found: int
+    urls_scraped: int
+    urls_failed: int
+    urls_pending: int
+    current_url: Optional[str]
+    started_at: Optional[str]
+    completed_at: Optional[str]
+    scraped_urls: List[dict]
+    error: Optional[str]
+
+def extract_links(html: str, base_url: str, same_domain: bool = True) -> List[str]:
+    """Extract all valid links from HTML content"""
+    soup = BeautifulSoup(html, "html.parser")
+    links = set()
+    base_domain = urlparse(base_url).netloc
+    
+    for a_tag in soup.find_all("a", href=True):
+        href = a_tag["href"]
+        
+        # Skip empty, javascript, mailto, tel links
+        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
+            continue
+        
+        # Convert relative URLs to absolute
+        full_url = urljoin(base_url, href)
+        parsed = urlparse(full_url)
+        
+        # Only HTTP/HTTPS
+        if parsed.scheme not in ("http", "https"):
+            continue
+        
+        # Same domain check
+        if same_domain and parsed.netloc != base_domain:
+            continue
+        
+        # Normalize URL (remove fragments, trailing slashes)
+        normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        if parsed.query:
+            normalized += f"?{parsed.query}"
+        normalized = normalized.rstrip("/")
+        
+        links.add(normalized)
+    
+    return list(links)
+
+def should_crawl_url(url: str, exclude_patterns: List[str], include_patterns: List[str]) -> bool:
+    """Check if URL should be crawled based on patterns"""
+    # Check exclude patterns
+    for pattern in exclude_patterns:
+        if re.search(pattern, url, re.IGNORECASE):
+            return False
+    
+    # If include patterns specified, URL must match at least one
+    if include_patterns:
+        for pattern in include_patterns:
+            if re.search(pattern, url, re.IGNORECASE):
+                return True
+        return False
+    
+    return True
+
+async def crawl_worker(job_id: str):
+    """Background worker to process crawl job"""
+    job = crawl_jobs.get(job_id)
+    if not job:
+        return
+    
+    job["status"] = "running"
+    job["started_at"] = datetime.now().isoformat()
+    
+    queue = deque([(job["seed_url"], 0)])  # (url, depth)
+    visited = set()
+    stop_event = crawl_locks.get(job_id)
+    
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+        while queue and len(visited) < job["max_urls"]:
+            # Check if stopped
+            if stop_event and stop_event.is_set():
+                job["status"] = "paused"
+                return
+            
+            url, depth = queue.popleft()
+            
+            if url in visited:
+                continue
+            
+            visited.add(url)
+            job["current_url"] = url
+            job["urls_pending"] = len(queue)
+            
+            # Rate limiting - 1 request per second
+            await asyncio.sleep(1.0)
+            
+            try:
+                print(f"🔍 Crawling [{depth}]: {url}")
+                
+                response = await client.get(url, headers={
+                    "User-Agent": "Cymbiose-KB-Crawler/1.0 (Clinical Knowledge Base Builder)"
+                })
+                response.raise_for_status()
+                
+                html = response.text
+                content_type = response.headers.get("content-type", "")
+                
+                # Only process HTML pages
+                if "text/html" not in content_type:
+                    job["urls_failed"] += 1
+                    continue
+                
+                # Extract and parse content
+                soup = BeautifulSoup(html, "html.parser")
+                title = soup.title.string if soup.title else url
+                
+                # Calculate quality score (simple heuristic)
+                text_length = len(soup.get_text())
+                has_mental_health_keywords = any(
+                    kw in html.lower() 
+                    for kw in ["mental health", "therapy", "counseling", "depression", "anxiety", "psychology", "clinical"]
+                )
+                
+                quality = 3  # Default
+                if text_length > 2000 and has_mental_health_keywords:
+                    quality = 5
+                elif text_length > 1000 and has_mental_health_keywords:
+                    quality = 4
+                elif text_length < 500:
+                    quality = 2
+                
+                # Add to scraped results
+                job["scraped_urls"].append({
+                    "url": url,
+                    "title": title[:200] if title else url,
+                    "depth": depth,
+                    "quality_score": quality,
+                    "content_length": text_length,
+                    "scraped_at": datetime.now().isoformat()
+                })
+                job["urls_scraped"] += 1
+                
+                # Discover new links if not at max depth
+                if depth < job["max_depth"]:
+                    new_links = extract_links(html, url, job["same_domain_only"])
+                    
+                    for link in new_links:
+                        if link not in visited and should_crawl_url(link, job["exclude_patterns"], job["include_patterns"]):
+                            queue.append((link, depth + 1))
+                            job["urls_found"] += 1
+                
+            except Exception as e:
+                print(f"❌ Failed to crawl {url}: {e}")
+                job["urls_failed"] += 1
+                job["scraped_urls"].append({
+                    "url": url,
+                    "title": f"Failed: {str(e)[:100]}",
+                    "depth": depth,
+                    "quality_score": 0,
+                    "error": str(e)[:200],
+                    "scraped_at": datetime.now().isoformat()
+                })
+    
+    job["status"] = "completed"
+    job["completed_at"] = datetime.now().isoformat()
+    job["current_url"] = None
+    job["urls_pending"] = 0
+    print(f"✅ Crawl job {job_id} completed: {job['urls_scraped']} URLs scraped")
+
+@app.post("/crawl/start")
+async def start_crawl(request: CrawlRequest):
+    """Start a new crawl job"""
+    import uuid
+    job_id = str(uuid.uuid4())[:8]
+    
+    crawl_jobs[job_id] = {
+        "id": job_id,
+        "seed_url": str(request.seed_url),
+        "status": "pending",
+        "max_depth": request.max_depth,
+        "max_urls": request.max_urls,
+        "same_domain_only": request.same_domain_only,
+        "include_patterns": request.include_patterns,
+        "exclude_patterns": request.exclude_patterns,
+        "urls_found": 1,
+        "urls_scraped": 0,
+        "urls_failed": 0,
+        "urls_pending": 1,
+        "current_url": None,
+        "started_at": None,
+        "completed_at": None,
+        "scraped_urls": [],
+        "error": None
+    }
+    
+    crawl_locks[job_id] = threading.Event()
+    
+    # Start background task
+    asyncio.create_task(crawl_worker(job_id))
+    
+    return {"job_id": job_id, "status": "started"}
+
+@app.get("/crawl/jobs")
+async def list_crawl_jobs():
+    """List all crawl jobs"""
+    return list(crawl_jobs.values())
+
+@app.get("/crawl/jobs/{job_id}")
+async def get_crawl_job(job_id: str):
+    """Get status of a specific crawl job"""
+    job = crawl_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
+
+@app.post("/crawl/jobs/{job_id}/stop")
+async def stop_crawl_job(job_id: str):
+    """Stop a running crawl job"""
+    job = crawl_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    stop_event = crawl_locks.get(job_id)
+    if stop_event:
+        stop_event.set()
+    
+    return {"status": "stopping", "job_id": job_id}
+
+@app.delete("/crawl/jobs/{job_id}")
+async def delete_crawl_job(job_id: str):
+    """Delete a crawl job"""
+    if job_id in crawl_jobs:
+        # Stop if running
+        stop_event = crawl_locks.get(job_id)
+        if stop_event:
+            stop_event.set()
+        
+        del crawl_jobs[job_id]
+        if job_id in crawl_locks:
+            del crawl_locks[job_id]
+        
+        return {"status": "deleted", "job_id": job_id}
+    
+    raise HTTPException(status_code=404, detail="Job not found")
+
+@app.get("/crawl/discover-links")
+async def discover_links(url: str, same_domain: bool = True):
+    """Discover all links from a single URL (preview)"""
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(url, headers={
+                "User-Agent": "Cymbiose-KB-Crawler/1.0"
+            })
+            response.raise_for_status()
+            
+            links = extract_links(response.text, url, same_domain)
+            
+            return {
+                "source_url": url,
+                "links_found": len(links),
+                "links": links[:100]  # Limit to first 100
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     print("🚀 Starting Cymbiose KB Crawler on http://localhost:8001")
     print(f"🔑 Gemini API: {'Configured' if GEMINI_API_KEY else 'Not configured'}")
+    print("🕷️ Auto-Crawler: Enabled")
     uvicorn.run(app, host="0.0.0.0", port=8001)
