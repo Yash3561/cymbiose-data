@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 interface ContentChunk {
     index: number;
@@ -69,12 +70,21 @@ const ExternalLinkIcon = () => (
 );
 
 export default function ScraperPage() {
+    const searchParams = useSearchParams();
     const [url, setUrl] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [scrapedData, setScrapedData] = useState<ScrapeData | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    // Pre-fill URL from query parameter (from seed URLs page)
+    useEffect(() => {
+        const urlParam = searchParams.get('url');
+        if (urlParam) {
+            setUrl(urlParam);
+        }
+    }, [searchParams]);
 
     const handleScrape = async () => {
         if (!url.trim()) return;
