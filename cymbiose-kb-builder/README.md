@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+# Cymbiose KB Builder 🧬
 
-First, run the development server:
+A Clinical Knowledge Base Builder powered by RAG (Retrieval Augmented Generation), Gemini 2.5 Flash, and Supabase.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## 🚀 Features
+
+*   **Knowledge Acquisition**: Auto-Crawler & URL Scraper to ingest clinical data from the web.
+*   **Vector Database**:  Uses `pgvector` on Supabase to store semantic embeddings of all content.
+*   **RAG Chat Assistant**:
+    *   **Context-Aware**: Retrieves relevant clinical chunks to answer queries accurately.
+    *   **Powered by Gemini 2.5 Flash**: Low latency, high intelligence.
+    *   **Trustworthy**: Refuses to answer if data is missing (no hallucination).
+*   **Dashboard**: Manage entries, view tags, and monitor KB statistics.
+
+## 🛠️ Tech Stack
+
+*   **Frontend**: Next.js 14, Tailwind CSS (Dark Mode), React Markdown.
+*   **Backend**: Next.js API Routes (Serverless).
+*   **Database**: Supabase (PostgreSQL + pgvector).
+*   **AI**: Google Gemini API (`text-embedding-004` & `gemini-2.5-flash`).
+*   **Crawler**: Python (FastAPI/Uvicorn) - *Separate Service*.
+
+## 📦 Installation & Setup
+
+### 1. Environment Variables
+Create a `.env` file in the root:
+
+```env
+DATABASE_URL="postgresql://postgres.[ref]:[pass]@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
+NEXT_PUBLIC_SUPABASE_URL="https://[ref].supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="[your-anon-key]"
+GEMINI_API_KEY="[your-gemini-key]"
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Database Setup
+Ensure your Supabase instance has `vector` extension enabled and the `KBChunk` table has an `embedding` column (vector(768)).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Run Development Server
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run dev
+```
 
-## Learn More
+Open [http://localhost:3000](http://localhost:3000).
 
-To learn more about Next.js, take a look at the following resources:
+## 💬 How to Use
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1.  **Add Data**: Go to **URL Scraper**, enter a clinical URL (e.g., Healthline article), and scrape.
+2.  **Process**: The system automatically chunks and generates embeddings (or use `scripts/process-embeddings.js` for batch).
+3.  **Chat**: Go to **Chat Assistant**. Ask questions like:
+    *   *"What are the symptoms of [condition]?"*
+    *   *"Summarize the article on [topic]."*
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🧪 Verification
+The system uses Gemini 2.5 Flash. You can verify model availability by running:
+`node scripts/check-models.js`
