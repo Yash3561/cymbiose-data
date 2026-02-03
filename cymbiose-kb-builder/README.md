@@ -56,3 +56,15 @@ Open [http://localhost:3000](http://localhost:3000).
 ## 🧪 Verification
 The system uses Gemini 2.5 Flash. You can verify model availability by running:
 `node scripts/check-models.js`
+
+## 🔧 Troubleshooting: "Redirected to localhost"
+
+If you are deployed on Vercel but get redirected back to `localhost:3000` after login, you need to update your **Supabase Auth Settings**:
+
+1.  Go to **Supabase Dashboard** > **Authentication** > **URL Configuration**.
+2.  **Site URL**: Set this to your Vercel URL (e.g., `https://cymbiose-kb-builder.vercel.app`).
+3.  **Redirect URLs**: Add your Vercel callback URL:
+    *   `https://cymbiose-kb-builder.vercel.app/auth/callback`
+    *   `https://[your-project].vercel.app/auth/callback`
+4.  Save changes.
+

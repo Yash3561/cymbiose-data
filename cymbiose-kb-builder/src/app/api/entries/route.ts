@@ -121,6 +121,52 @@ export async function POST(request: NextRequest) {
             console.log(`✅ Created ${body.chunks.length} chunks for entry ${entry.kbId}`);
         }
 
+        // --------------------------------------------------------------------------------
+        // 1. Create Audit Log
+        // --------------------------------------------------------------------------------
+        try {
+            await prisma.auditLog.create({
+                data: {
+                    kbEntryId: entry.id,
+                    action: 'CREATE',
+                    performedBy: body.addedBy || 'System',
+                    newValue: JSON.stringify({ title: entry.title, url: entry.urlOrLocation }),
+                    performedAt: new Date()
+                }
+            });
+        } catch (auditError) {
+            console.error('Failed to create audit log:', auditError);
+        }
+
+        // --------------------------------------------------------------------------------
+        // 2. Register/Update Data Source
+        // --------------------------------------------------------------------------------
+        if (entry.urlOrLocation) {
+            try {
+                // Extract domain as source name (simplistic approach)
+                const urlObj = new URL(entry.urlOrLocation);
+                const domain = urlObj.hostname.replace('www.', '');
+
+                await prisma.dataSource.upsert({
+                    where: { name: domain },
+                    update: {
+                        lastSyncAt: new Date(),
+                        totalEntries: { increment: 1 }
+                    },
+                    create: {
+                        name: domain,
+                        category: (entry.sourceCategory as any) || 'MEDIA_LITERATURE',
+                        baseUrl: urlObj.origin,
+                        isActive: true,
+                        lastSyncAt: new Date(),
+                        totalEntries: 1
+                    }
+                });
+            } catch (dsError) {
+                console.error('Failed to register data source:', dsError);
+            }
+        }
+
         return NextResponse.json(entry, { status: 201 });
     } catch (error) {
         console.error('Error creating KB entry:', error);
